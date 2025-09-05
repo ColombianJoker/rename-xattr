@@ -23,3 +23,8 @@ This utility was born because I have an old Python utility that creates extended
    Verbose mode
 + --help
    Help
+
+It works in MacOS with HFS+, APFS, and (Tuxera) NTFS.
+It works on Linux with EXT4 and XFS
+
+R.
