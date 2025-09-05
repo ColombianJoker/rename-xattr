@@ -10,18 +10,18 @@ This utility was born because I have an old Python utility that creates extended
 
 ### Options:
 
-+ --xattr XATTR_NAME
-+ -X XATTR_NAME
++ `--xattr XATTR_NAME`
++ `-X XATTR_NAME`
    Name to rename to the attributes
-+ --source-xattr XATTR_NAME
-+ -S XATTR_NAME
++ `--source-xattr XATTR_NAME`
++ `-S XATTR_NAME`
    Name to rename from the attributes
-+ --recursive
-+ -r
++ `--recursive`
++ `-r`
    If to recurse into directories
-+ --verbose
++ `--verbose`
    Verbose mode
-+ --help
++ `--help`
    Help
 
 It works in MacOS with HFS+, APFS, and (Tuxera) NTFS.
