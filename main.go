@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pkg/xattr"
 	"github.com/urfave/cli/v2"
@@ -23,7 +25,7 @@ var (
 
 func main() {
 	app := &cli.App{
-		Name:  "rename-xattr",
+		Name:  "organize-tb-rpm.py",
 		Usage: "Rename extended attributes of files",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -81,9 +83,28 @@ func main() {
 				return fmt.Errorf("at least one file or directory argument is required")
 			}
 
-			var wg sync.WaitGroup
-			fileCount := 0
+			// Use a worker pool pattern for better performance with large numbers of files.
+			numWorkers := runtime.NumCPU()
+			if numWorkers == 0 {
+				numWorkers = 4
+			}
 
+			var wg sync.WaitGroup
+			filePaths := make(chan string, 100) // Buffered channel to hold file paths
+			var processedCount int32
+
+			// Start worker goroutines
+			for i := 0; i < numWorkers; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for path := range filePaths {
+						processFile(path, &processedCount)
+					}
+				}()
+			}
+
+			// Walk the directories and send file paths to the channel
 			for _, path := range c.Args().Slice() {
 				info, err := os.Stat(path)
 				if err != nil {
@@ -97,12 +118,7 @@ func main() {
 							return err
 						}
 						if !d.IsDir() {
-							wg.Add(1)
-							go func(file string) {
-								defer wg.Done()
-								fileCount++
-								processFile(file, fileCount)
-							}(p)
+							filePaths <- p
 						}
 						return nil
 					})
@@ -110,16 +126,12 @@ func main() {
 						log.Printf("Error walking directory %s: %v", path, err)
 					}
 				} else if !info.IsDir() {
-					wg.Add(1)
-					go func(file string) {
-						defer wg.Done()
-						fileCount++
-						processFile(file, fileCount)
-					}(path)
+					filePaths <- path
 				}
 			}
 
-			wg.Wait()
+			close(filePaths) // Close the channel when all file paths have been sent
+			wg.Wait()        // Wait for all workers to finish
 			if verbose {
 				fmt.Println()
 			}
@@ -132,7 +144,7 @@ func main() {
 	}
 }
 
-func processFile(path string, count int) {
+func processFile(path string, count *int32) {
 	if debug {
 		xattrValue, err := xattr.Get(path, sourceXattrName)
 		if err != nil {
@@ -142,12 +154,14 @@ func processFile(path string, count int) {
 		return
 	}
 
+	currentCount := atomic.AddInt32(count, 1)
+
 	if verbose {
-		if count > 0 && count%blockSize == 0 {
+		if currentCount > 0 && currentCount%int32(blockSize) == 0 {
 			fmt.Print(" ")
 		}
-		if count > 0 && count%(blockSize*rowSize) == 0 {
-			fmt.Printf("[%d]\n", count)
+		if currentCount > 0 && currentCount%int32(blockSize*rowSize) == 0 {
+			fmt.Printf(" [%d]\n", currentCount)
 		}
 	}
 
